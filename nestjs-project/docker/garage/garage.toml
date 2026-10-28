@@ -1,0 +1,22 @@
+# Garage — single-node S3-compatible storage for local development and tests.
+# Production targets managed S3; never reuse these secrets outside dev.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "0.0.0.0:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "2be75851416ac9d17206122862c08f4b14d3cc869c5e1cc6ab39aabd2e95a9ba"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "0.0.0.0:3900"
+
+# Website endpoint: buckets with website access enabled (thumbnails only) are
+# served anonymously at http://<bucket>.web.garage.localhost:3902/<key>.
+[s3_web]
+bind_addr = "0.0.0.0:3902"
+root_domain = ".web.garage.localhost"
+index = "index.html"
