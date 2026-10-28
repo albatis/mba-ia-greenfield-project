@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 7/13 completed
+**SIs:** 8/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -83,9 +83,15 @@
   - **Out of scope — e2e queue isolation:** `AppModule`'s `BullModule.forRootAsync` has no configurable key prefix, so `videos-upload-complete.e2e-spec.ts` (per its spec) uses and obliterates the dev `bull:video-processing` queue instead of a `bull-test` one. Harmless today (the worker has no processor until SI-03.9), but once the dev `video-worker` runs, it could consume e2e jobs and wipe dev jobs. Suggested follow-up: a `QUEUE_PREFIX` in `queueConfig`, overridden to `bull-test` in e2e suites. **Scheduled (user decision, 2026-10-28):** do it as a separate task with its own commit on this branch, after SI-03.8 and **before SI-03.9**.
 
 ### SI-03.8 — Wrapper tipado de FFprobe/FFmpeg e fixtures de vídeo
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 12 passing — `mp4-atoms.util.spec.ts` 4, `ffprobe.service.integration-spec.ts` 4, `ffmpeg.service.integration-spec.ts` 4
+- **Observations:**
+  - **Extra files beyond the plan's list:** `src/media/media-command.ts` (`runMediaCommand` + `MediaCommandError`, shared by both services) and `src/media/media.constants.ts` (`MEDIA_TIMEOUTS_MS`).
+  - **Timeouts (not fixed by plan/TDs):** probe 60s, thumbnail 60s, remux 30min (stream copy of up to 10GB). Every method takes an optional `timeoutMs` override. On timeout the child gets `SIGKILL`, and the promise settles only on `close`, so no process outlives the call. A test runs an endless `lavfi` ffmpeg with a 300ms limit and then scans `/proc` for survivors.
+  - **`probe` contract:** a file with no video stream also throws `MediaCommandError` (`found no video stream`). Every probe failure is then a `MediaCommandError`, which SI-03.9 can map directly to `PROBE_FAILED` (TD-08). `durationSeconds` is `number | null` (null when the container declares no duration).
+  - **Fixtures:** `hevc.mp4` is video-only, so it covers both "codec outside the allowlist" and "`audioStream: null`" (no sixth fixture). All five are 4–16 KB (160x120, 1s). `generate.sh` strips metadata (`-map_metadata -1 -fflags +bitexact`) and uses `-x265-params pools=none`: inside the container libnuma prints `set_mempolicy: Operation not permitted` for every x265 thread pool.
+  - **`needsFaststart`:** handles 64-bit (`size = 1`) and to-end-of-file (`size = 0`) boxes; returns `false` when neither `moov` nor `mdat` is found (nothing to remux). The unit spec reads the two fixtures plus synthetic box files written to a temp dir.
+  - `MediaModule` has no configured imports, so no compilation test (per the testing guide); its wiring is exercised by both integration specs through `Test.createTestingModule({ imports: [MediaModule] })`.
 
 ### SI-03.9 — Video worker: entrypoint dedicado e processor `process-video`
 - **Status:** pending
