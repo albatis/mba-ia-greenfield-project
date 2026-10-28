@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 8/13 completed
+**SIs:** 9/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -94,9 +94,18 @@
   - `MediaModule` has no configured imports, so no compilation test (per the testing guide); its wiring is exercised by both integration specs through `Test.createTestingModule({ imports: [MediaModule] })`.
 
 ### SI-03.9 — Video worker: entrypoint dedicado e processor `process-video`
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 30 passing — `video-processing.processor.spec.ts` 23, `video-processing.processor.integration-spec.ts` 6, `worker.module.spec.ts` 1; plus `test/videos-create.e2e-spec.ts` 5 re-run (AppModule refactor)
+- **Observations:**
+  - **Plan deviation, `forFeature`:** `WorkerModule` registers `TypeOrmModule.forFeature([Video, Channel, User])`, not just `[Video]`. Under `autoLoadEntities`, `Video#channel` → `Channel#user` need their target metadata, or TypeORM fails with `Entity metadata for Video#channel was not found`. The worker reads and writes only `videos`.
+  - **Extra file beyond the plan's list:** `src/config/config-module.options.ts` (`configModuleOptions`: the same `load` + `validationSchema` + `validationOptions`), used by both `AppModule` and `WorkerModule` so the two processes cannot drift. `typeorm-options.factory.ts` exports `createTypeOrmOptions` + `typeOrmAsyncOptions`.
+  - **Concurrency:** `@Processor` options are static, so the processor sets `this.worker.concurrency = VIDEO_WORKER_CONCURRENCY` in `onApplicationBootstrap` (the worker exists after the BullMQ registrar's `onModuleInit`; runtime setter per bullmq 6 docs).
+  - **Codec allowlist:** the declared `mime_type` picks the rule, and ffprobe's `format_name` must contain the matching token (`mp4` / `webm`). So a WebM container declared as `video/mp4` is also `UNSUPPORTED_CODEC`. Faststart is only checked for `video/mp4`.
+  - **Writes are conditional:** both `ready` and `failed` updates use `WHERE id = ? AND processing_status = 'processing'`, same pattern as SI-03.7. The thumbnail key is `{public_id}.jpg` (TD-10 unguessable ID). The frame is extracted from the original download (same streams as the remux), at `min(1s, 10% × duration)`, or 0 when the duration is unknown.
+  - **Last-attempt detection:** BullMQ emits `failed` on every attempt and increments `attemptsMade` before emitting, so `attemptsMade >= opts.attempts` marks the final one. Errors in `onFailed` are logged, not rethrown (event handler; background-context rule).
+  - **AC manual check (dev env, worker via `docker compose exec video-worker npm run start:worker:dev`):** simulated SI-03.7's effect (row `processing` + source object + `process-video` job with prefix `bull`) instead of a real HTTP upload, because the API server was not running and the subproject CLAUDE.md forbids starting it unprompted. Results: moov-end MP4 → `ready` with duration/width/height/codecs/thumbnail_key; stored source boxes `ftyp moov free mdat`; thumbnail `200 image/jpeg` anonymously at `THUMBNAILS_PUBLIC_BASE_URL/{key}` from the host; re-running the job left the row and the object ETag unchanged; HEVC → `failed`/`UNSUPPORTED_CODEC`, job `completed` with `attemptsMade: 1`. API isolation is structural: no processor outside `src/worker/`. The AC rows, objects and jobs were removed afterwards, and `video-worker` was stopped again.
+  - **Shared `dist/` (watch out):** `nestjs-api` and `video-worker` bind-mount the same directory, and `nest-cli.json` has `deleteOutDir: true`. Running `start:dev` and `start:worker:dev` at the same time means each watcher wipes and rebuilds the other's `dist/`. Not observed here (API was down). If it causes restarts, a separate `outDir`/`--path` for the worker is a follow-up.
+  - **Test DB = dev DB:** integration suites run against the `streamtube` database (pre-existing setup), so test residue (e.g. a `ready` video on the `uploader` channel) shows up in dev between runs.
 
 ### SI-03.10 — Job agendado de limpeza de uploads abandonados
 - **Status:** pending
