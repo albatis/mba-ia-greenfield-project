@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 9/13 completed
+**SIs:** 10/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -108,9 +108,13 @@
   - **Test DB = dev DB:** integration suites run against the `streamtube` database (pre-existing setup), so test residue (e.g. a `ready` video on the `uploader` channel) shows up in dev between runs.
 
 ### SI-03.10 — Job agendado de limpeza de uploads abandonados
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6 passing — `upload-cleanup.service.integration-spec.ts` 4, `maintenance.scheduler.integration-spec.ts` 1, `worker.module.spec.ts` 1 (updated: asserts the new providers + `video-maintenance` queue)
+- **Observations:**
+  - **Per-video error isolation:** `cleanupAbandoned` catches errors per video, logs them and continues (cron/background context per `.claude/rules/nestjs-services.md`). `NoSuchUpload` is already absorbed by `StorageService.abortMultipartUpload`. Any other abort error leaves that row `'uploading'`, so the next run retries it. The row update is conditional (`WHERE processing_status = 'uploading'`), so an upload completed during the sweep is left alone.
+  - **Shared `now`:** `processed_at` takes the `now` passed to `cleanupAbandoned`, the same instant as the cutoff. The processor passes `new Date()`.
+  - **Restart test:** `MaintenanceScheduler` is checked by booting two `TestingModule`s one after the other (`compile()` + `init()`, which runs `onApplicationBootstrap`), not by calling the hook directly. The interval is overridden to a non-default value so the assertion proves the config is applied. With `every`, BullMQ also enqueues the first job right away. A Redis-only test has no consumer, and the queue is obliterated between tests.
+  - **Test spec staleness (preflight):** `specs/videos-details.plan.md` and `specs/videos-media-urls.plan.md` (SI-03.11/12) are ~23h older than the plan file. This is most likely a false positive: `/implement` ticks the plan's Deliverables after each SI, which bumps the file's mtime.
 
 ### SI-03.11 — Endpoint GET /videos/:videoId (detalhes e status do vídeo)
 - **Status:** pending

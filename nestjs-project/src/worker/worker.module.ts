@@ -9,7 +9,10 @@ import { QueueModule } from '../queue/queue.module';
 import { StorageModule } from '../storage/storage.module';
 import { User } from '../users/entities/user.entity';
 import { Video } from '../videos/entities/video.entity';
+import { MaintenanceScheduler } from './maintenance.scheduler';
+import { UploadCleanupProcessor } from './processors/upload-cleanup.processor';
 import { VideoProcessingProcessor } from './processors/video-processing.processor';
+import { UploadCleanupService } from './upload-cleanup.service';
 
 /** Root of the video worker process (src/worker.ts): queue consumers, no HTTP */
 @Module({
@@ -23,6 +26,11 @@ import { VideoProcessingProcessor } from './processors/video-processing.processo
     StorageModule,
     MediaModule,
   ],
-  providers: [VideoProcessingProcessor],
+  providers: [
+    VideoProcessingProcessor,
+    UploadCleanupService,
+    UploadCleanupProcessor,
+    MaintenanceScheduler,
+  ],
 })
 export class WorkerModule {}
