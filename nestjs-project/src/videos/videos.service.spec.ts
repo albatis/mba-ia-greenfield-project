@@ -9,6 +9,7 @@ import {
   UnsupportedVideoTypeException,
   UploadNotInProgressException,
   VideoNotFoundException,
+  VideoNotReadyException,
 } from '../common/exceptions/domain.exception';
 import storageConfig from '../config/storage.config';
 import uploadConfig from '../config/upload.config';
@@ -31,6 +32,7 @@ const USER_ID = 'user-1';
 const CHANNEL_ID = 'channel-1';
 const UPLOAD_ID = 'upload-1';
 const PART_URL_TTL = 900;
+const VIDEO_URL_TTL = 7_200;
 const PUBLIC_ID = 'Ab3_dE-fGh1';
 const SOURCE_KEY = 'videos/video-1/source';
 const THUMBNAILS_BASE_URL = 'http://thumbnails.example.test';
@@ -63,6 +65,7 @@ describe('VideosService', () => {
     completeMultipartUpload: jest.fn(),
     headObject: jest.fn(),
     deleteObject: jest.fn(),
+    presignGetObject: jest.fn(),
   };
   const processingProducer = { enqueueProcessing: jest.fn() };
 
@@ -125,6 +128,7 @@ describe('VideosService', () => {
             maxSizeBytes: MAX_SIZE,
             partSizeBytes: PART_SIZE,
             partUrlTtlSeconds: PART_URL_TTL,
+            videoUrlTtlSeconds: VIDEO_URL_TTL,
           },
         },
       ],
@@ -549,6 +553,57 @@ describe('VideosService', () => {
       ).rejects.toBeInstanceOf(UploadNotInProgressException);
 
       expect(processingProducer.enqueueProcessing).not.toHaveBeenCalled();
+    });
+  });
+
+  describe.each([
+    {
+      method: 'getStreamUrl' as const,
+      disposition: 'inline',
+    },
+    {
+      method: 'getDownloadUrl' as const,
+      disposition: 'attachment; filename="clip.mp4"',
+    },
+  ])('$method', ({ method, disposition }) => {
+    it.each([
+      VideoProcessingStatus.UPLOADING,
+      VideoProcessingStatus.PROCESSING,
+      VideoProcessingStatus.FAILED,
+    ])('rejects a %s video without signing', async (status) => {
+      videoRepository.findOne.mockResolvedValue(
+        uploadingVideo({ processing_status: status }),
+      );
+
+      await expect(service[method](USER_ID, PUBLIC_ID)).rejects.toBeInstanceOf(
+        VideoNotReadyException,
+      );
+
+      expect(storage.presignGetObject).not.toHaveBeenCalled();
+    });
+
+    it('signs the source object with the disposition and video TTL', async () => {
+      videoRepository.findOne.mockResolvedValue(
+        uploadingVideo({
+          processing_status: VideoProcessingStatus.READY,
+          upload_id: null,
+        }),
+      );
+      storage.presignGetObject.mockResolvedValue('https://storage/signed');
+
+      const result = await service[method](USER_ID, PUBLIC_ID);
+
+      expect(result).toEqual({
+        url: 'https://storage/signed',
+        expiresInSeconds: VIDEO_URL_TTL,
+      });
+      expect(storage.presignGetObject).toHaveBeenCalledWith({
+        bucket: STORAGE_BUCKETS.VIDEOS,
+        key: SOURCE_KEY,
+        expiresInSeconds: VIDEO_URL_TTL,
+        disposition,
+        contentType: 'video/mp4',
+      });
     });
   });
 });

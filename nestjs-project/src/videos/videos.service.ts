@@ -12,6 +12,7 @@ import {
   UnsupportedVideoTypeException,
   UploadNotInProgressException,
   VideoNotFoundException,
+  VideoNotReadyException,
 } from '../common/exceptions/domain.exception';
 import storageConfig from '../config/storage.config';
 import uploadConfig from '../config/upload.config';
@@ -24,10 +25,12 @@ import {
 import type { CompleteUploadDto } from './dto/complete-upload.dto';
 import type { CreateVideoDto } from './dto/create-video.dto';
 import type { InitiateUploadResponseDto } from './dto/initiate-upload-response.dto';
+import type { MediaUrlResponseDto } from './dto/media-url-response.dto';
 import type { SignPartsDto } from './dto/sign-parts.dto';
 import type { SignedPartsResponseDto } from './dto/signed-parts-response.dto';
 import type { UploadPartsResponseDto } from './dto/upload-parts-response.dto';
 import type { VideoResponseDto } from './dto/video-response.dto';
+import { buildContentDisposition } from './content-disposition.util';
 import { Video } from './entities/video.entity';
 import { generatePublicId, PUBLIC_ID_PATTERN } from './public-id.util';
 import { VideoProcessingProducer } from './video-processing.producer';
@@ -135,6 +138,25 @@ export class VideosService {
   ): Promise<VideoResponseDto> {
     const video = await this.findOwnedVideo(userId, publicId);
     return toVideoResponse(video, this.storageSettings.thumbnailsPublicBaseUrl);
+  }
+
+  async getStreamUrl(
+    userId: string,
+    publicId: string,
+  ): Promise<MediaUrlResponseDto> {
+    const video = await this.findReadyVideo(userId, publicId);
+    return this.presignVideo(video, buildContentDisposition('inline'));
+  }
+
+  async getDownloadUrl(
+    userId: string,
+    publicId: string,
+  ): Promise<MediaUrlResponseDto> {
+    const video = await this.findReadyVideo(userId, publicId);
+    return this.presignVideo(
+      video,
+      buildContentDisposition('attachment', video.original_filename),
+    );
   }
 
   async signUploadParts(
@@ -245,6 +267,33 @@ export class VideosService {
       { ...video, ...completed },
       this.storageSettings.thumbnailsPublicBaseUrl,
     );
+  }
+
+  private async findReadyVideo(
+    userId: string,
+    publicId: string,
+  ): Promise<Video> {
+    const video = await this.findOwnedVideo(userId, publicId);
+    if (video.processing_status !== VideoProcessingStatus.READY) {
+      throw new VideoNotReadyException();
+    }
+    return video;
+  }
+
+  // Bytes go storage → browser; the API only signs the URL (per TD-10)
+  private async presignVideo(
+    video: Video,
+    disposition: string,
+  ): Promise<MediaUrlResponseDto> {
+    const expiresInSeconds = this.upload.videoUrlTtlSeconds;
+    const url = await this.storage.presignGetObject({
+      bucket: STORAGE_BUCKETS.VIDEOS,
+      key: video.source_key,
+      expiresInSeconds,
+      disposition,
+      contentType: video.mime_type,
+    });
+    return { url, expiresInSeconds };
   }
 
   private pendingMultipart(video: Video): MultipartLocation {

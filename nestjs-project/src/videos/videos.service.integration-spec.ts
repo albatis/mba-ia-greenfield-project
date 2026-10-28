@@ -221,4 +221,36 @@ describe('VideosService (integration - DB + storage)', () => {
       expect(job?.data).toEqual({ videoId: video.id });
     });
   });
+
+  describe('getDownloadUrl', () => {
+    it('signs a URL that storage serves as an attachment under the original name', async () => {
+      const { videoId } = await service.initiateUpload(userId, {
+        filename: 'meu vídeo.mp4',
+        size: 1_024,
+        mimeType: 'video/mp4',
+      });
+      const video = await dataSource
+        .getRepository(Video)
+        .findOneByOrFail({ public_id: videoId });
+      await storage.putObject({
+        bucket: STORAGE_BUCKETS.VIDEOS,
+        key: video.source_key,
+        body: Buffer.alloc(1_024),
+        contentType: 'application/octet-stream',
+      });
+      await dataSource.getRepository(Video).update(video.id, {
+        processing_status: VideoProcessingStatus.READY,
+      });
+
+      const { url } = await service.getDownloadUrl(userId, videoId);
+      const res = await fetch(url);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toBe('video/mp4');
+      expect(res.headers.get('content-disposition')).toBe(
+        'attachment; filename="meu v_deo.mp4"; ' +
+          "filename*=UTF-8''meu%20v%C3%ADdeo.mp4",
+      );
+    });
+  });
 });

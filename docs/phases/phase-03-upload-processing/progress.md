@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 11/13 completed
+**SIs:** 12/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -124,9 +124,14 @@
   - `getOwnedVideo` is plain delegation (`findOwnedVideo` + `toVideoResponse`), so it has no unit test, per the plan's empty Tests section.
 
 ### SI-03.12 — Endpoints de URL de streaming e de download
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 61 passing — `content-disposition.util.spec.ts` 6, `videos.service.spec.ts` 43 (35 pre-existing + 8 new), `videos.service.integration-spec.ts` 5 (4 pre-existing + 1 new), `test/videos-media-urls.e2e-spec.ts` 7 (spec-derived)
+- **Observations:**
+  - **`buildContentDisposition(type, filename?)`:** with no filename (or nothing left after sanitizing) it returns the bare type, so the stream URL carries `response-content-disposition=inline`. `filename*=UTF-8''…` is added only when the name has non-ASCII characters; the quoted `filename` fallback replaces them with `_`. It also encodes `'()*`, which `encodeURIComponent` leaves as-is but RFC 5987 `attr-char` excludes.
+  - **Lone surrogates:** besides control characters, unpaired UTF-16 surrogates are stripped. `encodeURIComponent` throws `URIError` on them, so a filename like `"\ud800.mp4"` would otherwise make the download URL answer 500.
+  - **Service shape:** both methods share two private helpers, `findReadyVideo` (ownership → `'ready'` check, so a foreign video answers 404 before 409) and `presignVideo`. The URL signs `source_key`, which holds the processed file after the worker's faststart remux.
+  - **OpenAPI:** same `@ApiResponse({ status, … })` + `ApiErrorEnvelope` pattern as the other handlers (the plan named `@ApiOkResponse`), including `401`. `MediaUrlResponseDto` relies on the Swagger CLI plugin + JSDoc, like the other response DTOs in `src/videos/dto/`, instead of the explicit `@ApiProperty` that `.claude/rules/nestjs-dtos.md` asks for on response DTOs. SI-03.13 regenerates `openapi.json` and can confirm the schema there.
+  - **Storage behavior confirmed against Garage:** Range `bytes=0-1023` → `206` with `Content-Range` and the overridden `Content-Type`; `response-content-disposition` comes back verbatim as the `Content-Disposition` header.
 
 ### SI-03.13 — Contrato OpenAPI, `api.http` e documentação do ambiente
 - **Status:** pending

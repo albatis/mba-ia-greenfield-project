@@ -73,6 +73,12 @@ export class UploadNotInProgressException extends DomainException {
   }
 }
 
+export class VideoNotReadyException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_READY', 409, 'Video is not ready');
+  }
+}
+
 export class InvalidPartNumberException extends DomainException {
   constructor() {
     super(
