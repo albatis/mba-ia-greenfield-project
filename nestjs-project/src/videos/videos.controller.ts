@@ -164,4 +164,32 @@ export class VideosController {
   ): Promise<VideoResponseDto> {
     return this.videosService.completeUpload(user.sub, videoId, dto);
   }
+
+  @Get(':videoId')
+  @ApiOperation({
+    summary: 'Get video details',
+    description:
+      'Returns the processing and publication status, metadata and thumbnail URL of an owned video. Polled while the video uploads and processes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Video details',
+    type: VideoResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'VIDEO_NOT_FOUND',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async getVideo(
+    @CurrentUser() user: JwtPayload,
+    @Param('videoId') videoId: string,
+  ): Promise<VideoResponseDto> {
+    return this.videosService.getOwnedVideo(user.sub, videoId);
+  }
 }

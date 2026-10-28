@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 10/13 completed
+**SIs:** 11/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -117,9 +117,11 @@
   - **Test spec staleness (preflight):** `specs/videos-details.plan.md` and `specs/videos-media-urls.plan.md` (SI-03.11/12) are ~23h older than the plan file. This is most likely a false positive: `/implement` ticks the plan's Deliverables after each SI, which bumps the file's mtime.
 
 ### SI-03.11 — Endpoint GET /videos/:videoId (detalhes e status do vídeo)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 4 passing — `test/videos-details.e2e-spec.ts` (spec-derived)
+- **Observations:**
+  - **OpenAPI decorators:** the plan names `@ApiOkResponse` / `@ApiNotFoundResponse`; the handler uses `@ApiResponse({ status, … })` with `getSchemaPath(ApiErrorEnvelope)` instead, matching the other `VideosController` handlers and `.claude/rules/nestjs-controllers.md`. It also declares the `401` response. The generated OpenAPI is the same.
+  - `getOwnedVideo` is plain delegation (`findOwnedVideo` + `toVideoResponse`), so it has no unit test, per the plan's empty Tests section.
 
 ### SI-03.12 — Endpoints de URL de streaming e de download
 - **Status:** pending

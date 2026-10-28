@@ -129,6 +129,14 @@ export class VideosService {
     return video;
   }
 
+  async getOwnedVideo(
+    userId: string,
+    publicId: string,
+  ): Promise<VideoResponseDto> {
+    const video = await this.findOwnedVideo(userId, publicId);
+    return toVideoResponse(video, this.storageSettings.thumbnailsPublicBaseUrl);
+  }
+
   async signUploadParts(
     userId: string,
     publicId: string,

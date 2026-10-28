@@ -752,7 +752,7 @@ SI-03.13 — depends on SI-03.5, SI-03.6, SI-03.7, SI-03.10, SI-03.11, SI-03.12 
 - [x] SI-03.8 — Wrapper tipado de FFprobe/FFmpeg e fixtures de vídeo
 - [x] SI-03.9 — Video worker: entrypoint dedicado e processor `process-video`
 - [x] SI-03.10 — Job agendado de limpeza de uploads abandonados
-- [ ] SI-03.11 — Endpoint GET /videos/:videoId (detalhes e status do vídeo)
+- [x] SI-03.11 — Endpoint GET /videos/:videoId (detalhes e status do vídeo)
 - [ ] SI-03.12 — Endpoints de URL de streaming e de download
 - [ ] SI-03.13 — Contrato OpenAPI, `api.http` e documentação do ambiente
 
