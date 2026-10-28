@@ -60,3 +60,25 @@ export class UnsupportedVideoTypeException extends DomainException {
     super('UNSUPPORTED_VIDEO_TYPE', 400, 'Video type is not supported');
   }
 }
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}
+
+export class UploadNotInProgressException extends DomainException {
+  constructor() {
+    super('UPLOAD_NOT_IN_PROGRESS', 409, 'Video upload is not in progress');
+  }
+}
+
+export class InvalidPartNumberException extends DomainException {
+  constructor() {
+    super(
+      'INVALID_PART_NUMBER',
+      400,
+      'Part number is greater than the part count',
+    );
+  }
+}

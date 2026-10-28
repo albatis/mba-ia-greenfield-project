@@ -2,6 +2,8 @@ import { randomBytes } from 'crypto';
 
 export const PUBLIC_ID_LENGTH = 11;
 
+export const PUBLIC_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+
 // 9 random bytes encode to 12 base64url chars; keeping 11 leaves 66 bits of
 // entropy — unguessable and short enough for a URL.
 export function generatePublicId(): string {

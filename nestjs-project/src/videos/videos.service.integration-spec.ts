@@ -7,6 +7,7 @@ import { VerificationToken } from '../auth/entities/verification-token.entity';
 import { ChannelsModule } from '../channels/channels.module';
 import { ChannelsService } from '../channels/channels.service';
 import { Channel } from '../channels/entities/channel.entity';
+import { VideoNotFoundException } from '../common/exceptions/domain.exception';
 import uploadConfig from '../config/upload.config';
 import { STORAGE_BUCKETS } from '../storage/storage.constants';
 import { StorageModule } from '../storage/storage.module';
@@ -101,6 +102,50 @@ describe('VideosService (integration - DB + storage)', () => {
         uploadId: result.uploadId,
       });
       expect(parts).toEqual([]);
+    });
+  });
+
+  describe('signUploadParts + listUploadedParts', () => {
+    const PART_BYTES = 5 * 1024 * 1024;
+
+    it('lists a part PUT through a signed URL with its etag and size', async () => {
+      const { videoId } = await service.initiateUpload(userId, {
+        filename: 'clip.mp4',
+        size: 200_000_000,
+        mimeType: 'video/mp4',
+      });
+
+      const { parts } = await service.signUploadParts(userId, videoId, {
+        partNumbers: [1],
+      });
+      const res = await fetch(parts[0].url, {
+        method: 'PUT',
+        body: new Uint8Array(PART_BYTES),
+      });
+      expect(res.status).toBe(200);
+
+      const { uploadedParts } = await service.listUploadedParts(
+        userId,
+        videoId,
+      );
+      expect(uploadedParts).toEqual([
+        { partNumber: 1, etag: res.headers.get('etag'), size: PART_BYTES },
+      ]);
+    });
+
+    it("hides another user's video", async () => {
+      const { videoId } = await service.initiateUpload(userId, {
+        filename: 'clip.mp4',
+        size: 1_000,
+        mimeType: 'video/mp4',
+      });
+      const stranger = await dataSource
+        .getRepository(User)
+        .save({ email: 'stranger@example.com', password: 'hashed' });
+
+      await expect(
+        service.listUploadedParts(stranger.id, videoId),
+      ).rejects.toBeInstanceOf(VideoNotFoundException);
     });
   });
 });

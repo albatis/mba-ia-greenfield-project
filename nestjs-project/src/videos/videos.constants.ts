@@ -4,3 +4,6 @@ export const ALLOWED_VIDEO_MIME_TYPES = ['video/mp4', 'video/webm'] as const;
 // Collisions on 66 random bits are practically impossible; the retry only
 // guards against the theoretical case (per TD-11)
 export const PUBLIC_ID_MAX_ATTEMPTS = 3;
+
+// Upper bound of part URLs signed per request; clients ask again for the rest
+export const SIGN_PARTS_MAX = 100;

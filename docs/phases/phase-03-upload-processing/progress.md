@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 5/13 completed
+**SIs:** 6/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -62,9 +62,14 @@
   - `openapi.json` / `src/metadata.ts` not regenerated here (SI-03.13 owns the contract export).
 
 ### SI-03.6 — Endpoints de partes: assinatura sob demanda e listagem para retomada
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 36 passing — `videos.service.spec.ts` 25 (12 pre-existing + 13 new), `videos.service.integration-spec.ts` 3 (1 pre-existing + 2 new), `test/videos-upload-parts.e2e-spec.ts` 8 (spec-derived)
+- **Observations:**
+  - **Ownership query:** `findOwnedVideo` filters by `public_id` and `channel.user_id` in one `findOne` (nested relation `where`), so a foreign video is indistinguishable from an unknown one. A malformed ID short-circuits before any query. An extra integration test checks that another user's video answers `VideoNotFoundException` against the real DB.
+  - **"In progress" check:** the private `pendingMultipart(video)` helper treats `processing_status !== 'uploading'` **or** a null `upload_id` as `UPLOAD_NOT_IN_PROGRESS`, and returns the `MultipartLocation` that both methods use. SI-03.7 can reuse it.
+  - **Validation order:** ownership → status → part numbers. A request mixing a valid and an out-of-range part number signs nothing.
+  - **Extra items beyond the plan's list:** `PUBLIC_ID_PATTERN` in `public-id.util.ts` and `SIGN_PARTS_MAX = 100` in `videos.constants.ts` (DTO `@ArrayMaxSize`). Nested response DTOs `SignedPartDto` / `UploadedPartDto` live in the same files as their parent DTOs.
+  - **Test environment:** `S3_PUBLIC_ENDPOINT` in tests is the overridden `buildTestStorageConfig().publicEndpoint` (`storage:3900`), so the e2e host check compares against that value.
 
 ### SI-03.7 — Endpoint POST /videos/:videoId/upload/complete (finalização + enfileiramento)
 - **Status:** pending
