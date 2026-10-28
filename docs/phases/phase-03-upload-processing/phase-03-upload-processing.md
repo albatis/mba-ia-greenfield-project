@@ -149,7 +149,7 @@ Deliver the backend and infrastructure for video upload and processing — S3-co
 ### SI-03.5 — Endpoint POST /videos (pré-cadastro do rascunho + início do multipart)
 
 **Route:** POST /videos
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-create.plan.md`
 **Authorization:** Authenticated (cria rascunho no próprio channel) — per `### Authorization Matrix`
 
 **Description:** Ao iniciar o upload, cria o vídeo como rascunho e o multipart upload no storage em uma única chamada, devolvendo o plano de partes ditado pelo servidor.
@@ -186,7 +186,7 @@ Deliver the backend and infrastructure for video upload and processing — S3-co
 ### SI-03.6 — Endpoints de partes: assinatura sob demanda e listagem para retomada
 
 **Route:** POST /videos/:videoId/upload/parts, GET /videos/:videoId/upload/parts
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-upload-parts.plan.md`
 **Authorization:** Owner — per `### Authorization Matrix` (não-dono recebe `404`)
 
 **Description:** Assina URLs de `UploadPart` sob demanda e lista as partes já recebidas pelo storage, permitindo upload paralelo e retomada após falha de conexão sem que nenhum byte passe pela API.
@@ -222,7 +222,7 @@ Deliver the backend and infrastructure for video upload and processing — S3-co
 ### SI-03.7 — Endpoint POST /videos/:videoId/upload/complete (finalização + enfileiramento)
 
 **Route:** POST /videos/:videoId/upload/complete
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-upload-complete.plan.md`
 **Authorization:** Owner — per `### Authorization Matrix` (não-dono recebe `404`)
 
 **Description:** Sinal explícito de fim de upload: fecha o multipart, verifica o tamanho real do objeto, move o vídeo para `'processing'` e enfileira o processamento depois do commit.
@@ -354,7 +354,7 @@ Deliver the backend and infrastructure for video upload and processing — S3-co
 ### SI-03.11 — Endpoint GET /videos/:videoId (detalhes e status do vídeo)
 
 **Route:** GET /videos/:videoId
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-details.plan.md`
 **Authorization:** Owner — per `### Authorization Matrix` (não-dono recebe `404`)
 
 **Description:** Expõe ao dono o estado do vídeo (status de processamento e publicação, metadados e URL pública do thumbnail), superfície de polling que o slice de frontend usa durante upload e processamento.
@@ -380,7 +380,7 @@ Deliver the backend and infrastructure for video upload and processing — S3-co
 ### SI-03.12 — Endpoints de URL de streaming e de download
 
 **Route:** GET /videos/:videoId/stream-url, GET /videos/:videoId/download-url
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-media-urls.plan.md`
 **Authorization:** Owner — per `### Authorization Matrix` (não-dono recebe `404`; regra para vídeos publicados fica para as fases 04/05)
 
 **Description:** Entrega ao dono URLs presignadas de curta duração para reprodução inline (com Range servido direto pelo storage) e para download do arquivo original, sem que bytes de vídeo passem pela API ou pelo BFF.
