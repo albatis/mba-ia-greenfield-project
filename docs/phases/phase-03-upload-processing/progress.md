@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 3/13 completed
+**SIs:** 4/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -38,9 +38,16 @@
   - **Pre-existing lint debt (out of scope, affects final verification):** `npm run lint` already reports errors in untouched files (e.g. `auth.service.integration-spec.ts` `no-unsafe-*`, `require-await`, `no-unused-vars`; `create-test-data-source.ts` `no-unsafe-function-type`). New and edited code in this SI lints clean.
 
 ### SI-03.4 — Fundação de filas (BullMQ) e producer de processamento
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 8 passing (`queue.module.spec.ts` 4 + `videos.module.spec.ts` 1 + `video-processing.producer.integration-spec.ts` 3)
+- **Observations:**
+  - **Dependency change (user-approved):** `@nestjs/bullmq` downgraded `^12.0.0` → `^11.0.5`. 12.0.0 ships ESM-only (`"type": "module"`, also `@nestjs/bull-shared` 12) and the project's CommonJS Jest/ts-jest setup can't load it (`SyntaxError: Unexpected token 'export'`). 11.0.5 is CommonJS, supports NestJS 11 and `bullmq ^6`; same API surface.
+  - **Dependency added (user-approved):** `ioredis ^5.11.1`. In bullmq 6 `ioredis` is an optional peer dependency; without it the API fails at boot with `BullMQ could not load the optional 'ioredis' package`.
+  - **Defaults not specified by plan/TDs** (TD-06 leaves them to implement): `video-processing` → `attempts: 3`, exponential backoff `30s`; `video-maintenance` → `attempts: 3`, exponential backoff `10s`; both → `removeOnComplete: { age: 1d, count: 1000 }`, `removeOnFail: { age: 7d }`.
+  - **Extra file beyond the plan's list:** `src/test/queue.ts` (`testBullRootModule()` with key prefix `bull-test`, `clearTestQueue()` via `obliterate({ force: true })`), mirroring the `*-test` bucket isolation of `src/test/storage.ts` so suites never touch the dev `bull:*` keys. Later queue suites (SI-03.7, SI-03.9, SI-03.10) can reuse it.
+  - **SI-03.3 transient break resolved:** `VideosModule` registers `Video` in `forFeature`, so `AppModule` boots again.
+  - **AC manual check:** booted an `AppModule` application context (no HTTP server) inside the container: `redis-cli --scan --pattern 'bull:video-processing:*'` shows `meta`/`id`/`events`/`marker`; two `enqueueProcessing` calls with the same id → 1 job; `getWorkers()` = 0 on both queues. Check job removed afterwards.
+  - `videos.module.spec.ts` logs a pg `DeprecationWarning` (`client.query()` while already executing a query), raised by TypeORM `synchronize` on the test DataSource; tests pass. Not addressed here.
 
 ### SI-03.5 — Endpoint POST /videos (pré-cadastro do rascunho + início do multipart)
 - **Status:** pending

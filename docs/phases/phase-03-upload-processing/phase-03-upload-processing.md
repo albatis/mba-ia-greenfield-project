@@ -745,7 +745,7 @@ SI-03.13 — depends on SI-03.5, SI-03.6, SI-03.7, SI-03.10, SI-03.11, SI-03.12 
 - [x] SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - [x] SI-03.2 — StorageModule com clientes S3 interno e de presign
 - [x] SI-03.3 — Entidade Video, migration e gerador de public ID
-- [ ] SI-03.4 — Fundação de filas (BullMQ) e producer de processamento
+- [x] SI-03.4 — Fundação de filas (BullMQ) e producer de processamento
 - [ ] SI-03.5 — Endpoint POST /videos (pré-cadastro do rascunho + início do multipart)
 - [ ] SI-03.6 — Endpoints de partes: assinatura sob demanda e listagem para retomada
 - [ ] SI-03.7 — Endpoint POST /videos/:videoId/upload/complete (finalização + enfileiramento)
