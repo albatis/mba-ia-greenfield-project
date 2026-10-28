@@ -79,6 +79,7 @@ describe('envValidationSchema — storage, queue and upload keys', () => {
       THUMBNAILS_PUBLIC_BASE_URL: 'http://thumbnails.web.garage.localhost:3902',
       REDIS_HOST: 'redis',
       REDIS_PORT: 6379,
+      QUEUE_PREFIX: 'bull',
       UPLOAD_MAX_SIZE_BYTES: 10737418240,
       UPLOAD_PART_SIZE_BYTES: 67108864,
     });

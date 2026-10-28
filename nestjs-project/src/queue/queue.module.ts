@@ -25,6 +25,7 @@ const retention: Pick<DefaultJobOptions, 'removeOnComplete' | 'removeOnFail'> =
       inject: [queueConfig.KEY],
       useFactory: (queue: ConfigType<typeof queueConfig>) => ({
         connection: { host: queue.redisHost, port: queue.redisPort },
+        prefix: queue.prefix,
       }),
     }),
     BullModule.registerQueue(

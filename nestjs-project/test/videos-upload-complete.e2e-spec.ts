@@ -12,6 +12,7 @@ import { AppModule } from '../src/app.module';
 import { ChannelsService } from '../src/channels/channels.service';
 import { DomainExceptionFilter } from '../src/common/filters/domain-exception.filter';
 import { ValidationExceptionFilter } from '../src/common/filters/validation-exception.filter';
+import queueConfig from '../src/config/queue.config';
 import storageConfig from '../src/config/storage.config';
 import uploadConfig from '../src/config/upload.config';
 import {
@@ -22,7 +23,7 @@ import {
 import { STORAGE_BUCKETS } from '../src/storage/storage.constants';
 import { StorageService } from '../src/storage/storage.service';
 import { cleanAllTables } from '../src/test/create-test-data-source';
-import { clearTestQueue } from '../src/test/queue';
+import { buildTestQueueConfig, clearTestQueue } from '../src/test/queue';
 import { buildTestStorageConfig, clearTestBuckets } from '../src/test/storage';
 import { User } from '../src/users/entities/user.entity';
 import { Video } from '../src/videos/entities/video.entity';
@@ -42,7 +43,10 @@ async function createApp(
 ): Promise<INestApplication<App>> {
   let builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(storageConfig.KEY)
-    .useValue(buildTestStorageConfig());
+    .useValue(buildTestStorageConfig())
+    // Keeps e2e jobs out of the dev queues a running video worker consumes
+    .overrideProvider(queueConfig.KEY)
+    .useValue(buildTestQueueConfig());
   if (upload) {
     builder = builder
       .overrideProvider(uploadConfig.KEY)

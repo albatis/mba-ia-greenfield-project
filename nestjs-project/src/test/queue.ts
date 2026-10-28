@@ -1,5 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import type { DynamicModule } from '@nestjs/common';
+import type { ConfigType } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import queueConfig from '../config/queue.config';
 
@@ -9,12 +10,18 @@ import queueConfig from '../config/queue.config';
  */
 export const TEST_QUEUE_PREFIX = 'bull-test';
 
+/** queueConfig pointed at the test prefix; e2e suites override `queueConfig.KEY` with it. */
+export const buildTestQueueConfig = (): ConfigType<typeof queueConfig> => ({
+  ...queueConfig(),
+  prefix: TEST_QUEUE_PREFIX,
+});
+
 /** BullMQ root connection for tests — same Redis as dev, isolated by prefix. */
 export function testBullRootModule(): DynamicModule {
-  const { redisHost, redisPort } = queueConfig();
+  const { redisHost, redisPort, prefix } = buildTestQueueConfig();
   return BullModule.forRoot({
     connection: { host: redisHost, port: redisPort },
-    prefix: TEST_QUEUE_PREFIX,
+    prefix,
   });
 }
 

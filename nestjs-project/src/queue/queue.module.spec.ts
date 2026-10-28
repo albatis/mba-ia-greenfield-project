@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Queue } from 'bullmq';
 import queueConfig from '../config/queue.config';
+import { TEST_QUEUE_PREFIX, buildTestQueueConfig } from '../test/queue';
 import {
   VIDEO_MAINTENANCE_QUEUE,
   VIDEO_PROCESSING_QUEUE,
@@ -18,7 +19,10 @@ describe('QueueModule', () => {
         ConfigModule.forRoot({ isGlobal: true, load: [queueConfig] }),
         QueueModule,
       ],
-    }).compile();
+    })
+      .overrideProvider(queueConfig.KEY)
+      .useValue(buildTestQueueConfig())
+      .compile();
   });
 
   afterAll(async () => {
@@ -42,6 +46,15 @@ describe('QueueModule', () => {
       expect.objectContaining({ host: redisHost, port: redisPort }),
     );
   });
+
+  it.each([VIDEO_PROCESSING_QUEUE, VIDEO_MAINTENANCE_QUEUE])(
+    'should key %s under the configured prefix',
+    (name) => {
+      expect(module.get<Queue>(getQueueToken(name)).opts.prefix).toBe(
+        TEST_QUEUE_PREFIX,
+      );
+    },
+  );
 
   it.each([VIDEO_PROCESSING_QUEUE, VIDEO_MAINTENANCE_QUEUE])(
     'should give %s bounded retries with exponential backoff and age-based retention',
