@@ -7,6 +7,7 @@ import { VerificationToken } from '../auth/entities/verification-token.entity';
 import { Channel } from '../channels/entities/channel.entity';
 import queueConfig from '../config/queue.config';
 import storageConfig from '../config/storage.config';
+import uploadConfig from '../config/upload.config';
 import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
 import { StorageService } from '../storage/storage.service';
 import { createTestDataSource } from '../test/create-test-data-source';
@@ -14,6 +15,7 @@ import { User } from '../users/entities/user.entity';
 import { Video } from './entities/video.entity';
 import { VideoProcessingProducer } from './video-processing.producer';
 import { VideosModule } from './videos.module';
+import { VideosService } from './videos.service';
 
 const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
 
@@ -25,7 +27,7 @@ describe('VideosModule', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [storageConfig, queueConfig],
+          load: [storageConfig, queueConfig, uploadConfig],
         }),
         TypeOrmModule.forRoot(createTestDataSource(ALL_ENTITIES).options),
         VideosModule,
@@ -38,6 +40,7 @@ describe('VideosModule', () => {
   });
 
   it('should compile with storage, queue and channels wired in', () => {
+    expect(module.get(VideosService)).toBeInstanceOf(VideosService);
     expect(module.get(VideoProcessingProducer)).toBeInstanceOf(
       VideoProcessingProducer,
     );

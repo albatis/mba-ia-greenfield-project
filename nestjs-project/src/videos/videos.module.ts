@@ -5,8 +5,10 @@ import { QueueModule } from '../queue/queue.module';
 import { StorageModule } from '../storage/storage.module';
 import { Video } from './entities/video.entity';
 import { VideoProcessingProducer } from './video-processing.producer';
+import { VideosController } from './videos.controller';
+import { VideosService } from './videos.service';
 
-// Producers only — @Processor consumers live in the video worker (WorkerModule)
+// No @Processor here — queue consumers live in the video worker (WorkerModule)
 @Module({
   imports: [
     TypeOrmModule.forFeature([Video]),
@@ -14,6 +16,7 @@ import { VideoProcessingProducer } from './video-processing.producer';
     StorageModule,
     ChannelsModule,
   ],
-  providers: [VideoProcessingProducer],
+  controllers: [VideosController],
+  providers: [VideosService, VideoProcessingProducer],
 })
 export class VideosModule {}

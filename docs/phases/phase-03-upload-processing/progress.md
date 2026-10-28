@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 4/13 completed
+**SIs:** 5/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -50,9 +50,16 @@
   - `videos.module.spec.ts` logs a pg `DeprecationWarning` (`client.query()` while already executing a query), raised by TypeORM `synchronize` on the test DataSource; tests pass. Not addressed here.
 
 ### SI-03.5 — Endpoint POST /videos (pré-cadastro do rascunho + início do multipart)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 24 passing — `videos.service.spec.ts` 12, `videos.service.integration-spec.ts` 1, `channels.service.integration-spec.ts` 5 (3 pre-existing + 2 new), `videos.module.spec.ts` 1 (updated: `uploadConfig` + `VideosService`), `test/videos-create.e2e-spec.ts` 5 (spec-derived)
+- **Observations:**
+  - **Key layout (not fixed by plan):** the internal UUID is generated in the service (`randomUUID()`) before the multipart starts, and `source_key = videos/{id}/source`. The key stays the same when `public_id` is regenerated on a collision, and it never exposes the public ID.
+  - **Extra files beyond the plan's list:** `src/videos/videos.constants.ts` (`ALLOWED_VIDEO_MIME_TYPES`, `PUBLIC_ID_MAX_ATTEMPTS = 3`) and `src/common/database/pg-errors.ts` (`isUniqueViolationOn(error, column)`, typed via `QueryFailedError.driverError`).
+  - **Out of scope:** `ChannelsService` keeps its own untyped `isPgUniqueViolationOnColumn` helper, which already fails `npm run lint` (6 `no-unsafe-*` errors, lines 12–16, pre-existing). It could switch to `isUniqueViolationOn` in a separate task.
+  - A user without a channel makes `initiateUpload` throw a plain `Error` (500). Every user gets a channel at registration, so this is an invariant violation, not a domain error.
+  - `filename` is trimmed via `@Transform` before `@IsNotEmpty` / `@MaxLength(255)` ("trimmed non-empty" rule).
+  - E2E overrides `storageConfig.KEY` with `buildTestStorageConfig()` so `AppModule` writes to `videos-test`; the user is seeded directly (argon2 hash, `is_confirmed: true`) and logs in via `POST /auth/login`.
+  - `openapi.json` / `src/metadata.ts` not regenerated here (SI-03.13 owns the contract export).
 
 ### SI-03.6 — Endpoints de partes: assinatura sob demanda e listagem para retomada
 - **Status:** pending

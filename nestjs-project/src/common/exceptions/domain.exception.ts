@@ -48,3 +48,15 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class FileTooLargeException extends DomainException {
+  constructor() {
+    super('FILE_TOO_LARGE', 400, 'File exceeds the maximum upload size');
+  }
+}
+
+export class UnsupportedVideoTypeException extends DomainException {
+  constructor() {
+    super('UNSUPPORTED_VIDEO_TYPE', 400, 'Video type is not supported');
+  }
+}
