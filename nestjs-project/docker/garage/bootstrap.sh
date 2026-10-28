@@ -57,5 +57,8 @@ for bucket in "${PUBLIC_BUCKETS[@]}"; do
   garage bucket website --allow "$bucket" >/dev/null
 done
 
+echo "==> CORS on video buckets (browser part uploads)"
+docker compose exec -T nestjs-api npm run --silent storage:cors -- "${PRIVATE_BUCKETS[@]}"
+
 echo "==> Done"
 garage bucket list

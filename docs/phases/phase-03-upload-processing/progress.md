@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 1/13 completed
+**SIs:** 2/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -13,12 +13,18 @@
   - `video-worker` keeps the image's default `CMD` (`tail -f /dev/null`) until the worker entrypoint exists (SI-03.9).
   - **Out of scope:** `.env.example` line `MAIL_FROM="StreamTube" <noreply@streamtube.com>` breaks `docker compose` `.env` parsing (only the display name is quoted). The new `.env` uses `MAIL_FROM='"StreamTube" <noreply@streamtube.com>'`; fixing `.env.example` is a separate task.
   - **Lint:** the pre-existing `SWAGGER_ENABLED` tests in `env.validation.integration-spec.ts` already failed `no-unsafe-*` (Joi's `ValidationResult` error branch types `value` as `any`). The shared `validate` helper now returns a narrowed `value: Record<string, unknown>`, which fixes both old and new cases.
-  - **Git:** `dev` branch exists only locally — `git push -u origin dev` failed (no GitHub credentials in this environment).
+  - **Git:** `dev` and `feature/phase-03-upload-processing` pushed to `origin` (SI-03.1 commit `6d244d7`).
 
 ### SI-03.2 — StorageModule com clientes S3 interno e de presign
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 15 passing (`storage.module.spec.ts` 3 + `storage.service.integration-spec.ts` 12)
+- **Observations:**
+  - **Checksum fix (1 fix attempt):** AWS SDK v3's default `requestChecksumCalculation: 'WHEN_SUPPORTED'` bakes `x-amz-checksum-crc32` of the empty body into presigned `UploadPart` URLs, so Garage rejected real parts with `400 InvalidDigest`. `createS3Client` sets `requestChecksumCalculation` / `responseChecksumValidation` to `'WHEN_REQUIRED'` (per SDK CLIENTS.md, issue #6810). Relevant for production S3 too: browser part PUTs would hit the same mismatch.
+  - **API shape:** methods take a logical bucket (`STORAGE_BUCKETS.VIDEOS | THUMBNAILS`) mapped to physical names via `storageConfig`, so the test helper swaps in `videos-test` / `thumbnails-test` by config alone. TTL (`expiresInSeconds`) and the full `ResponseContentDisposition` value are passed in by callers (SI-03.6 / SI-03.12 own those values).
+  - **Extra files beyond the plan's list:** `src/storage/storage.client.ts` (`createS3Client`, shared by `StorageModule` and the `storage:cors` script) and `src/storage/storage.errors.ts` (`StoragePartsRejectedError`, with `reason` = S3 error name).
+  - `headObject` returns `null` on `NotFound` (valid "absent" result for the TD-12 size check); `abortMultipartUpload` treats `NoSuchUpload` as a no-op.
+  - `storage:cors` takes optional bucket args (default `S3_VIDEOS_BUCKET`); `bootstrap.sh` applies it to `videos` and `videos-test`. Verified a host-side `OPTIONS` preflight on `videos` returns `Access-Control-Expose-Headers: ETag`.
+  - `src/test/storage.ts` exports `testStorageConfig` (same `storage` namespace, so later suites can `load` it or `overrideProvider(storageConfig.KEY)`), `createTestStorage()`, and `clearTestBuckets()` (deletes objects and aborts pending multipart uploads).
 
 ### SI-03.3 — Entidade Video, migration e gerador de public ID
 - **Status:** pending
