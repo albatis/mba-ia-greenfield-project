@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 2/13 completed
+**SIs:** 3/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -27,9 +27,15 @@
   - `src/test/storage.ts` exports `testStorageConfig` (same `storage` namespace, so later suites can `load` it or `overrideProvider(storageConfig.KEY)`), `createTestStorage()`, and `clearTestBuckets()` (deletes objects and aborts pending multipart uploads).
 
 ### SI-03.3 — Entidade Video, migration e gerador de public ID
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 74 passing across 13 suites — SI files (`video.entity.integration-spec.ts` 6, `public-id.util.spec.ts` 2, `migrations.integration-spec.ts` 3) + 10 pre-existing suites touched by the `Channel#videos` relation; green on two consecutive runs
+- **Observations:**
+  - **Transient break until SI-03.4:** `Channel` now has `@OneToMany` → `Video`, but no module registers `Video` in `forFeature` until `VideosModule` (SI-03.4). Under `autoLoadEntities`, `AppModule` fails with `Entity metadata for Channel#videos was not found` — API boot and every e2e suite are broken between SI-03.3 and SI-03.4. Not pulled forward (plan boundary); SI-03.4 resolves it.
+  - **Test DataSources:** `Video` added to `ALL_ENTITIES` in the 10 existing specs that list `Channel` (required by the new inverse relation).
+  - **Migrations spec fixes (2 fix attempts):** (1) `beforeAll` dropped tables via parallel `Promise.all`; with the new `videos → channels` FK this hit `deadlock detected`, leaving a half-dropped schema → now one `DROP TABLE … CASCADE` statement. (2) Enum types survive `DROP TABLE` and synchronize-based suites recreate them (`verification_tokens_type_enum` already exists) → `beforeAll` drops every `public` enum type. `afterAll` now wraps `runMigrations` in `try/finally` so `destroy()` always runs; a failing re-migrate previously left Jest hanging on an open handle.
+  - **Entity:** explicit enum type names `video_processing_status_enum` / `video_publication_status_enum`. The `bigint → number` transformer is also applied to `duration_seconds` (`numeric` also comes back as a string from pg); covered by an extra test.
+  - **AC manual check:** `migration:revert` of `CreateVideos` removes the `videos` table and both enum types; re-applied afterwards (dev DB is fully migrated).
+  - **Pre-existing lint debt (out of scope, affects final verification):** `npm run lint` already reports errors in untouched files (e.g. `auth.service.integration-spec.ts` `no-unsafe-*`, `require-await`, `no-unused-vars`; `create-test-data-source.ts` `no-unsafe-function-type`). New and edited code in this SI lints clean.
 
 ### SI-03.4 — Fundação de filas (BullMQ) e producer de processamento
 - **Status:** pending
