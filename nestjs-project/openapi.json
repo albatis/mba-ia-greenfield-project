@@ -438,6 +438,494 @@
           "auth"
         ]
       }
+    },
+    "/videos": {
+      "post": {
+        "description": "Creates the draft video and the multipart upload in storage, and returns the server-dictated part plan. Part URLs are signed on demand.",
+        "operationId": "VideosController_initiateUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVideoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft created and multipart upload started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiateUploadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "FILE_TOO_LARGE, UNSUPPORTED_VIDEO_TYPE or VALIDATION_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Start a video upload",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/upload/parts": {
+      "post": {
+        "description": "Signs presigned PUT URLs for the requested parts. Also used to re-sign missing parts when resuming an upload.",
+        "operationId": "VideosController_signUploadParts",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignPartsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Presigned part URLs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedPartsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_PART_NUMBER or VALIDATION_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UPLOAD_NOT_IN_PROGRESS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Sign upload part URLs",
+        "tags": [
+          "videos"
+        ]
+      },
+      "get": {
+        "description": "Lists the parts storage already holds, so a resumed upload re-sends only the missing ones.",
+        "operationId": "VideosController_listUploadedParts",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Upload plan and parts already in storage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadPartsResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UPLOAD_NOT_IN_PROGRESS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List uploaded parts",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/upload/complete": {
+      "post": {
+        "description": "Closes the multipart upload, checks the real object size and queues the video for processing.",
+        "operationId": "VideosController_completeUpload",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload completed; the video is now processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_UPLOAD_PARTS, FILE_TOO_LARGE or VALIDATION_ERROR",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "UPLOAD_NOT_IN_PROGRESS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Complete a video upload",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}": {
+      "get": {
+        "description": "Returns the processing and publication status, metadata and thumbnail URL of an owned video. Polled while the video uploads and processes.",
+        "operationId": "VideosController_getVideo",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get video details",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/stream-url": {
+      "get": {
+        "description": "Signs a short-lived storage URL for inline playback. Storage serves Range requests directly; request a new URL when storage answers 403.",
+        "operationId": "VideosController_getStreamUrl",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned inline playback URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUrlResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VIDEO_NOT_READY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a streaming URL",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{videoId}/download-url": {
+      "get": {
+        "description": "Signs a short-lived storage URL that downloads the video file under its original filename.",
+        "operationId": "VideosController_getDownloadUrl",
+        "parameters": [
+          {
+            "name": "videoId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned download URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUrlResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VIDEO_NOT_READY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get a download URL",
+        "tags": [
+          "videos"
+        ]
+      }
     }
   },
   "info": {
@@ -478,6 +966,92 @@
         "properties": {}
       },
       "ResetPasswordDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateVideoDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "InitiateUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "processingStatus": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "ready",
+              "failed"
+            ],
+            "example": "uploading"
+          },
+          "publicationStatus": {
+            "type": "string",
+            "enum": [
+              "draft"
+            ],
+            "example": "draft"
+          }
+        },
+        "required": [
+          "processingStatus",
+          "publicationStatus"
+        ]
+      },
+      "SignPartsDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "SignedPartsResponseDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UploadPartsResponseDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CompleteUploadDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "VideoResponseDto": {
+        "type": "object",
+        "properties": {
+          "processingStatus": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "ready",
+              "failed"
+            ]
+          },
+          "publicationStatus": {
+            "type": "string",
+            "enum": [
+              "draft"
+            ]
+          },
+          "failureReason": {
+            "type": "string",
+            "enum": [
+              "FILE_TOO_LARGE",
+              "UNSUPPORTED_CODEC",
+              "PROBE_FAILED",
+              "PROCESSING_ERROR",
+              "UPLOAD_ABANDONED"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "processingStatus",
+          "publicationStatus",
+          "failureReason"
+        ]
+      },
+      "MediaUrlResponseDto": {
         "type": "object",
         "properties": {}
       },

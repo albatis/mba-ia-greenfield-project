@@ -118,3 +118,79 @@ Content-Type: {{contentType}}
   "token": "{{resetToken}}",
   "new_password": "new-password123"
 }
+
+
+###
+# ─────────────────────────────────────────────
+# UPLOAD E PROCESSAMENTO DE VÍDEO
+# ─────────────────────────────────────────────
+# Fluxo completo com o fixture h264-aac-moov-end.mp4 (1 parte). Requer login (passo 4).
+# O processamento só acontece com o video worker rodando (npm run start:worker:dev).
+# Para outro arquivo, ajuste filename/size/mimeType e o corpo do passo 12.
+
+@videoId = {{createVideo.response.body.$.videoId}}
+@partUrl = {{signParts.response.body.$.parts[0].url}}
+@partEtag = {{putPart.response.headers.ETag}}
+
+### 10. Pré-cadastrar o rascunho e iniciar o upload multipart
+# @name createVideo
+POST {{baseUrl}}/videos
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "filename": "h264-aac-moov-end.mp4",
+  "size": 16132,
+  "mimeType": "video/mp4"
+}
+
+
+### 11. Assinar as partes a enviar (URLs presignadas de PUT)
+# @name signParts
+POST {{baseUrl}}/videos/{{videoId}}/upload/parts
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "partNumbers": [1]
+}
+
+
+### 12. Enviar a parte direto ao storage — o ETag da resposta é usado no passo 14
+# @name putPart
+PUT {{partUrl}}
+
+< ./test/fixtures/videos/h264-aac-moov-end.mp4
+
+
+### 13. Listar as partes já enviadas (retomada do upload)
+GET {{baseUrl}}/videos/{{videoId}}/upload/parts
+Authorization: Bearer {{accessToken}}
+
+
+### 14. Finalizar o upload — vídeo passa para "processing" e o job é enfileirado
+# O header ETag do storage já vem entre aspas ("<md5>"), por isso sem aspas extras abaixo
+POST {{baseUrl}}/videos/{{videoId}}/upload/complete
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "parts": [
+    { "partNumber": 1, "etag": {{partEtag}} }
+  ]
+}
+
+
+### 15. Detalhes e status do vídeo — repita até processingStatus = "ready"
+GET {{baseUrl}}/videos/{{videoId}}
+Authorization: Bearer {{accessToken}}
+
+
+### 16. URL de streaming (inline, suporta Range) — exige vídeo "ready"
+GET {{baseUrl}}/videos/{{videoId}}/stream-url
+Authorization: Bearer {{accessToken}}
+
+
+### 17. URL de download (attachment com o nome original) — exige vídeo "ready"
+GET {{baseUrl}}/videos/{{videoId}}/download-url
+Authorization: Bearer {{accessToken}}

@@ -754,12 +754,12 @@ SI-03.13 — depends on SI-03.5, SI-03.6, SI-03.7, SI-03.10, SI-03.11, SI-03.12 
 - [x] SI-03.10 — Job agendado de limpeza de uploads abandonados
 - [x] SI-03.11 — Endpoint GET /videos/:videoId (detalhes e status do vídeo)
 - [x] SI-03.12 — Endpoints de URL de streaming e de download
-- [ ] SI-03.13 — Contrato OpenAPI, `api.http` e documentação do ambiente
+- [x] SI-03.13 — Contrato OpenAPI, `api.http` e documentação do ambiente
 
 **Full test suites:**
 
-- [ ] Backend unit + integration tests pass (`docker compose exec nestjs-api npm test -- --runInBand`)
-- [ ] E2E tests pass (`docker compose exec nestjs-api npm run test:e2e`)
-- [ ] Type/compilation checks pass (`docker compose exec nestjs-api npx tsc --noEmit`)
+- [x] Backend unit + integration tests pass (`docker compose exec nestjs-api npm test -- --runInBand`)
+- [x] E2E tests pass (`docker compose exec nestjs-api npm run test:e2e`)
+- [x] Type/compilation checks pass (`docker compose exec nestjs-api npx tsc --noEmit`)
 - [ ] Lint passes (`docker compose exec nestjs-api npm run lint`)
-- [ ] Project builds successfully, including the worker entrypoint (`docker compose exec nestjs-api npm run build` → `dist/main.js` and `dist/worker.js`)
+- [x] Project builds successfully, including the worker entrypoint (`docker compose exec nestjs-api npm run build` → `dist/main.js` and `dist/worker.js`)

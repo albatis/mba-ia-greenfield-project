@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 12/13 completed
+**SIs:** 13/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -134,6 +134,18 @@
   - **Storage behavior confirmed against Garage:** Range `bytes=0-1023` → `206` with `Content-Range` and the overridden `Content-Type`; `response-content-disposition` comes back verbatim as the `Content-Disposition` header.
 
 ### SI-03.13 — Contrato OpenAPI, `api.http` e documentação do ambiente
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** no tests (existing `src/openapi-export.integration-spec.ts` re-run: 9 passing)
+- **Observations:**
+  - **Contract:** `openapi.json` now has the 7 video operations under `/videos`, `/videos/{videoId}`, `/videos/{videoId}/upload/parts` (POST + GET), `/videos/{videoId}/upload/complete`, `/videos/{videoId}/stream-url` and `/videos/{videoId}/download-url`, each with `401` plus its `400`/`404`/`409` responses referencing `ApiErrorEnvelope`. Running `npm run openapi:export` a second time produced a byte-identical file.
+  - **Out of scope, pre-existing (affects the frontend slice):** `openapi:export` runs through `ts-node`, which skips the `@nestjs/swagger` CLI plugin from `nest-cli.json`, and `src/metadata.ts` is an empty stub. Only properties with explicit `@ApiProperty` reach the exported file: `CreateVideoDto`, `SignPartsDto`, `CompleteUploadDto`, `SignedPartsResponseDto`, `UploadPartsResponseDto` and `MediaUrlResponseDto` come out with `properties: {}`, and `InitiateUploadResponseDto` / `VideoResponseDto` list only their enum fields. The auth DTOs in the committed file were already empty (`RegisterDto`, `LoginDto`, …). The runtime `/api/docs` (compiled with the plugin) is complete, so the artifact and the runtime spec differ. Suggested follow-up: export from a plugin-aware build (e.g. `nest build` + `node dist/openapi-export`, or `PluginMetadataGenerator` → real `src/metadata.ts`), plus an assertion in `openapi-export.integration-spec.ts` that DTO schemas have properties. Needed before the frontend slice generates types.
+  - **`api.http`:** steps 10–17 cover the whole flow with `test/fixtures/videos/h264-aac-moov-end.mp4` (16132 bytes, 1 part), using response variables (`createVideo`, `signParts`, `putPart`). The S3 `ETag` header is already quoted, so the complete body interpolates it without quotes (`"etag": {{partEtag}}`). Not exercised end-to-end here: that needs the API server and worker running, which the subproject CLAUDE.md says to start only when the user asks.
+  - **`CLAUDE.md`:** added Redis / Garage / bucket readiness checks, a "First boot" sequence (`cp .env.example .env` → `up -d` → `npm install` → `migration:run` → `./docker/garage/bootstrap.sh`, which already runs `storage:cors`), the `video-worker`/`redis`/`storage`/`mailpit` services with ports, worker commands, and the rule that the worker starts only on request. The first-boot step still says to quote `MAIL_FROM` by hand: the `.env.example` fix noted in SI-03.1 is still pending.
+
+## Final verification (2026-10-28)
+
+- **Unit + integration:** 42 suites, 291 tests passing (`npm test -- --runInBand`).
+- **E2E:** 8 suites, 82 tests passing (`npm run test:e2e`) after fix attempt 1/3. `test:e2e` had no `--runInBand` and `test/jest-e2e.json` no `maxWorkers`, although `CLAUDE.md` describes it as "already configured". With this phase's 5 new e2e suites, the parallel run collided on seeded users (35 failures: `duplicate key` → login `401`). Added `--runInBand` to the `test:e2e` script in `package.json`.
+- **Type-check:** `npx tsc --noEmit` exit 0.
+- **Build:** `npm run build` → `dist/main.js` and `dist/worker.js`.
+- **Lint: failing, pre-existing debt.** `eslint "{src,apps,libs,test}/**/*.ts"` (run without `--fix`, so untouched files are not rewritten) reports 148 errors and 40 warnings in 10 files: `test/auth.e2e-spec.ts` 48, `auth.service.spec.ts` 45, `mail.service.integration-spec.ts` 16, `channels.service.spec.ts` 15, `auth.service.integration-spec.ts` 7, `domain-exception.filter.spec.ts` 7, `channels.service.ts` 6, `validation-exception.filter.spec.ts` 2, `create-test-data-source.ts` 1, `users.service.integration-spec.ts` 1. None of the errors are on lines changed by this branch, and every file created in phase 03 lints clean. Fixing them is a separate task (see SI-03.3 and SI-03.5 observations).

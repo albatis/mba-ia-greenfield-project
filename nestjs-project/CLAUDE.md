@@ -2,7 +2,7 @@
 
 ## Environment Startup Verification
 
-**Default behavior:** starting the environment means starting **only infrastructure services** (database, mail, etc.) — **never** start the NestJS application server unless the user explicitly asks to run/serve the project (e.g., "rode o projeto", "suba o servidor", "run the app").
+**Default behavior:** starting the environment means starting **only infrastructure services** (database, mail, Redis, storage, and the idle `nestjs-api` / `video-worker` containers) — **never** start the NestJS application server or the video worker process unless the user explicitly asks to run/serve the project (e.g., "rode o projeto", "suba o servidor", "suba o worker", "run the app").
 
 After starting infrastructure, always confirm the containers are up before proceeding:
 
@@ -13,8 +13,11 @@ docker compose ps   # all services must show status "running"
 Then verify each infrastructure service is actually ready to accept connections — not just running:
 
 - **PostgreSQL:** `docker compose exec db pg_isready -U streamtube` — expect `accepting connections`
+- **Redis:** `docker compose exec redis redis-cli ping` — expect `PONG`
+- **Storage (Garage):** `docker compose exec storage /garage status` — expect the node under `HEALTHY NODES` with zone `dc1` and a capacity (a `NO ROLE ASSIGNED` node means the first-boot bootstrap has not run yet)
+- **Buckets:** `docker compose exec storage /garage bucket list` — expect `videos`, `videos-test`, `thumbnails`, `thumbnails-test`
 
-Only start the NestJS dev server (`npm run start:dev`) when the user **explicitly** asks to run the application — never as part of "start the environment".
+Only start the NestJS dev server (`npm run start:dev`) or the video worker (`npm run start:worker:dev`) when the user **explicitly** asks — never as part of "start the environment". The `nestjs-api` and `video-worker` containers idle (`tail -f /dev/null`) until one of these commands runs inside them.
 
 ## Development Environment
 
@@ -29,11 +32,32 @@ docker compose exec nestjs-api npm install
 
 # Run the dev server (watch mode)
 docker compose exec nestjs-api npm run start:dev
+
+# Run the video worker (watch mode) — separate process, separate container
+docker compose exec video-worker npm run start:worker:dev
 ```
+
+### First boot (clean environment)
+
+Run once, in order, from `nestjs-project/` on the host:
+
+```bash
+cp .env.example .env                                # then quote MAIL_FROM (see "Environment File Conventions")
+docker compose up -d
+docker compose exec nestjs-api npm install
+docker compose exec nestjs-api npm run migration:run
+./docker/garage/bootstrap.sh                        # layout, access key, buckets, public thumbnails, CORS
+```
+
+`docker/garage/bootstrap.sh` is idempotent and also runs `npm run storage:cors` (inside `nestjs-api`) for `videos` and `videos-test`, so browser part uploads can read the `ETag` header. Re-run `docker compose exec nestjs-api npm run storage:cors` on its own only after changing `STORAGE_CORS_ALLOWED_ORIGINS`. The `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` values in `.env.example` match the dev key the bootstrap imports.
 
 Services:
 - `nestjs-api` — NestJS API, port `3000`
+- `video-worker` — video processing worker (FFprobe/FFmpeg, BullMQ consumer of `video-processing` and `video-maintenance`); no exposed port, same image and bind mount as `nestjs-api`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `redis` — Redis 7, port `6379`, BullMQ broker
+- `storage` — Garage (S3-compatible), port `3900` (S3 API, presigned upload/stream/download URLs) and `3902` (public website endpoint serving the `thumbnails` bucket)
+- `mailpit` — SMTP `1025`, web UI `8025`
 
 All verification and teardown commands run on the **host machine**:
 
@@ -44,8 +68,13 @@ curl http://localhost:3000
 # Verify PostgreSQL is ready (runs inside the db container)
 docker compose exec db pg_isready -U streamtube
 
+# Verify Redis and storage are ready
+docker compose exec redis redis-cli ping
+docker compose exec storage /garage status
+
 # Check container logs
 docker compose logs nestjs-api
+docker compose logs video-worker
 docker compose logs db
 
 # Tear down the entire environment
@@ -62,6 +91,9 @@ docker compose down
 npm run start:dev                        # Dev server with hot-reload
 npm run build                            # Compile to dist/
 npm run start:prod                       # Run compiled build
+npm run storage:cors [bucket...]         # Apply browser CORS to video buckets (default: S3_VIDEOS_BUCKET)
+npm run openapi:export                   # Regenerate the versioned openapi.json
+npm run migration:run                    # Apply pending TypeORM migrations
 
 npm test                                 # Unit tests
 npm run test:watch                       # Unit tests in watch mode
@@ -73,12 +105,22 @@ npm run lint                             # ESLint with auto-fix
 npm run format                           # Prettier formatting
 ```
 
+### Worker-only commands (always prefix with `docker compose exec video-worker`)
+
+```bash
+npm run start:worker:dev                 # Video worker with hot-reload (entry: src/worker.ts)
+npm run start:worker                     # Run compiled worker (dist/worker.js)
+```
+
 ### Host-only commands (Docker / connectivity probes)
 
 ```bash
 docker compose ps
 docker compose logs nestjs-api
 docker compose exec db pg_isready -U streamtube
+docker compose exec redis redis-cli ping
+docker compose exec storage /garage status
+./docker/garage/bootstrap.sh
 curl http://localhost:3000
 ```
 
@@ -99,7 +141,7 @@ During active development, run only the tests related to the file being changed 
 
 Commands that never exit (dev server, watch modes) must be run in background in the Bash tool — otherwise the agent blocks indefinitely waiting for the process to return.
 
-This applies to: `start:dev`, `start:prod`, `test:watch`, and any other persistent process.
+This applies to: `start:dev`, `start:prod`, `start:worker:dev`, `start:worker`, `test:watch`, and any other persistent process. Like the API server, the video worker is started only when the user explicitly asks for it.
 
 ## Test Type Selection
 
