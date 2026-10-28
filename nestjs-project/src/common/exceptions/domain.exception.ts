@@ -82,3 +82,9 @@ export class InvalidPartNumberException extends DomainException {
     );
   }
 }
+
+export class InvalidUploadPartsException extends DomainException {
+  constructor() {
+    super('INVALID_UPLOAD_PARTS', 400, 'Upload parts are invalid');
+  }
+}

@@ -1,6 +1,8 @@
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import type { Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { VerificationToken } from '../auth/entities/verification-token.entity';
@@ -9,6 +11,11 @@ import { ChannelsService } from '../channels/channels.service';
 import { Channel } from '../channels/entities/channel.entity';
 import { VideoNotFoundException } from '../common/exceptions/domain.exception';
 import uploadConfig from '../config/upload.config';
+import {
+  PROCESS_VIDEO_JOB,
+  type ProcessVideoJobData,
+  VIDEO_PROCESSING_QUEUE,
+} from '../queue/queue.constants';
 import { STORAGE_BUCKETS } from '../storage/storage.constants';
 import { StorageModule } from '../storage/storage.module';
 import { StorageService } from '../storage/storage.service';
@@ -16,9 +23,11 @@ import {
   cleanAllTables,
   createTestDataSource,
 } from '../test/create-test-data-source';
+import { clearTestQueue, testBullRootModule } from '../test/queue';
 import { clearTestBuckets, testStorageConfig } from '../test/storage';
 import { User } from '../users/entities/user.entity';
 import { Video } from './entities/video.entity';
+import { VideoProcessingProducer } from './video-processing.producer';
 import { VideoProcessingStatus, VideoPublicationStatus } from './video.enums';
 import { VideosService } from './videos.service';
 
@@ -29,6 +38,7 @@ describe('VideosService (integration - DB + storage)', () => {
   let dataSource: DataSource;
   let service: VideosService;
   let storage: StorageService;
+  let queue: Queue<ProcessVideoJobData>;
   let userId: string;
   let channelId: string;
 
@@ -43,23 +53,28 @@ describe('VideosService (integration - DB + storage)', () => {
         TypeOrmModule.forFeature([Video]),
         StorageModule,
         ChannelsModule,
+        testBullRootModule(),
+        BullModule.registerQueue({ name: VIDEO_PROCESSING_QUEUE }),
       ],
-      providers: [VideosService],
+      providers: [VideosService, VideoProcessingProducer],
     }).compile();
 
     dataSource = module.get(DataSource);
     service = module.get(VideosService);
     storage = module.get(StorageService);
+    queue = module.get(getQueueToken(VIDEO_PROCESSING_QUEUE));
   }, 30000);
 
   afterAll(async () => {
     await clearTestBuckets();
+    await clearTestQueue(queue);
     await module.close();
   });
 
   beforeEach(async () => {
     await cleanAllTables(dataSource);
     await clearTestBuckets();
+    await clearTestQueue(queue);
 
     const user = await dataSource
       .getRepository(User)
@@ -146,6 +161,64 @@ describe('VideosService (integration - DB + storage)', () => {
       await expect(
         service.listUploadedParts(stranger.id, videoId),
       ).rejects.toBeInstanceOf(VideoNotFoundException);
+    });
+  });
+
+  describe('completeUpload', () => {
+    const putPart = async (url: string, bytes: number): Promise<string> => {
+      const res = await fetch(url, {
+        method: 'PUT',
+        body: new Uint8Array(bytes),
+      });
+      expect(res.status).toBe(200);
+      return res.headers.get('etag')!;
+    };
+
+    it('completes 2 real parts, records the real size and enqueues process-video by internal id', async () => {
+      const firstPart = 5 * 1024 * 1024;
+      const lastPart = 4 * 1024;
+      const { videoId, partSize } = await service.initiateUpload(userId, {
+        filename: 'clip.mp4',
+        size: uploadConfig().partSizeBytes + 1024,
+        mimeType: 'video/mp4',
+      });
+      expect(partSize).toBe(uploadConfig().partSizeBytes);
+      const { parts } = await service.signUploadParts(userId, videoId, {
+        partNumbers: [1, 2],
+      });
+      const etags = [
+        await putPart(parts[0].url, firstPart),
+        await putPart(parts[1].url, lastPart),
+      ];
+
+      const result = await service.completeUpload(userId, videoId, {
+        parts: [
+          { partNumber: 1, etag: etags[0] },
+          { partNumber: 2, etag: etags[1] },
+        ],
+      });
+
+      expect(result.processingStatus).toBe(VideoProcessingStatus.PROCESSING);
+      const video = await dataSource
+        .getRepository(Video)
+        .findOneByOrFail({ public_id: videoId });
+      expect(video).toEqual(
+        expect.objectContaining({
+          processing_status: VideoProcessingStatus.PROCESSING,
+          size_bytes: firstPart + lastPart,
+          upload_id: null,
+          upload_completed_at: expect.any(Date) as Date,
+        }),
+      );
+      const object = await storage.headObject({
+        bucket: STORAGE_BUCKETS.VIDEOS,
+        key: video.source_key,
+      });
+      expect(object?.contentLength).toBe(firstPart + lastPart);
+
+      const job = await queue.getJob(video.id);
+      expect(job?.name).toBe(PROCESS_VIDEO_JOB);
+      expect(job?.data).toEqual({ videoId: video.id });
     });
   });
 });

@@ -1,7 +1,7 @@
 # phase-03-upload-processing — Progress
 
 **Status:** in_progress
-**SIs:** 6/13 completed
+**SIs:** 7/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
 - **Status:** completed
@@ -72,9 +72,15 @@
   - **Test environment:** `S3_PUBLIC_ENDPOINT` in tests is the overridden `buildTestStorageConfig().publicEndpoint` (`storage:3900`), so the e2e host check compares against that value.
 
 ### SI-03.7 — Endpoint POST /videos/:videoId/upload/complete (finalização + enfileiramento)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 49 passing — `videos.service.spec.ts` 35 (25 pre-existing + 10 new), `videos.service.integration-spec.ts` 4 (3 pre-existing + 1 new), `video-response.mapper.spec.ts` 3, `videos.module.spec.ts` 1 (unchanged, re-run: `VideosService` now injects `storageConfig` + `VideoProcessingProducer`), `test/videos-upload-complete.e2e-spec.ts` 6 (spec-derived)
+- **Observations:**
+  - **Atomic transition:** the move to `'processing'` is a conditional `UPDATE … WHERE id = ? AND processing_status = 'uploading'`. With `affected = 0`, the call throws `UPLOAD_NOT_IN_PROGRESS` and enqueues nothing, so two concurrent completes cannot create two jobs. The job is enqueued only after this update succeeds; a unit test checks the call order.
+  - **Part order:** the service sorts `parts` by `partNumber` before `CompleteMultipartUpload` (S3 requires ascending order), so a client sending them unsorted does not get `InvalidPartOrder`.
+  - **FILE_TOO_LARGE path:** besides `failed` + `FILE_TOO_LARGE`, it also sets `upload_id = null` (the multipart no longer exists after complete). A missing object after a successful complete throws a plain `Error` (500): storage invariant violation, not a domain error.
+  - **Extra items beyond the plan's list:** `COMPLETE_PARTS_MAX = 10_000` in `videos.constants.ts`; nested `CompletedPartDto` in `complete-upload.dto.ts`. `VideosService` now injects `storageConfig` (for `thumbnailsPublicBaseUrl`). The mapper strips a trailing `/` from the base URL.
+  - **Known gap:** two concurrent completes where the second reaches storage after the first has finished get `NoSuchUpload` from S3, which `StorageService.completeMultipartUpload` does not map → 500 instead of 409. Only reachable in a true race; mapping `NoSuchUpload` belongs to `StorageService` (SI-03.2 scope).
+  - **Out of scope — e2e queue isolation:** `AppModule`'s `BullModule.forRootAsync` has no configurable key prefix, so `videos-upload-complete.e2e-spec.ts` (per its spec) uses and obliterates the dev `bull:video-processing` queue instead of a `bull-test` one. Harmless today (the worker has no processor until SI-03.9), but once the dev `video-worker` runs, it could consume e2e jobs and wipe dev jobs. Suggested follow-up: a `QUEUE_PREFIX` in `queueConfig`, overridden to `bull-test` in e2e suites. **Scheduled (user decision, 2026-10-28):** do it as a separate task with its own commit on this branch, after SI-03.8 and **before SI-03.9**.
 
 ### SI-03.8 — Wrapper tipado de FFprobe/FFmpeg e fixtures de vídeo
 - **Status:** pending

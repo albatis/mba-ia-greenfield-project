@@ -9,11 +9,13 @@ import {
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { InitiateUploadResponseDto } from './dto/initiate-upload-response.dto';
 import { SignPartsDto } from './dto/sign-parts.dto';
 import { SignedPartsResponseDto } from './dto/signed-parts-response.dto';
 import { UploadPartsResponseDto } from './dto/upload-parts-response.dto';
+import { VideoResponseDto } from './dto/video-response.dto';
 import { VideosService } from './videos.service';
 
 @ApiTags('videos')
@@ -121,5 +123,45 @@ export class VideosController {
     @Param('videoId') videoId: string,
   ): Promise<UploadPartsResponseDto> {
     return this.videosService.listUploadedParts(user.sub, videoId);
+  }
+
+  @Post(':videoId/upload/complete')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Complete a video upload',
+    description:
+      'Closes the multipart upload, checks the real object size and queues the video for processing.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload completed; the video is now processing',
+    type: VideoResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'INVALID_UPLOAD_PARTS, FILE_TOO_LARGE or VALIDATION_ERROR',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'VIDEO_NOT_FOUND',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'UPLOAD_NOT_IN_PROGRESS',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async completeUpload(
+    @CurrentUser() user: JwtPayload,
+    @Param('videoId') videoId: string,
+    @Body() dto: CompleteUploadDto,
+  ): Promise<VideoResponseDto> {
+    return this.videosService.completeUpload(user.sub, videoId, dto);
   }
 }

@@ -8,24 +8,31 @@ import { isUniqueViolationOn } from '../common/database/pg-errors';
 import {
   FileTooLargeException,
   InvalidPartNumberException,
+  InvalidUploadPartsException,
   UnsupportedVideoTypeException,
   UploadNotInProgressException,
   VideoNotFoundException,
 } from '../common/exceptions/domain.exception';
+import storageConfig from '../config/storage.config';
 import uploadConfig from '../config/upload.config';
 import { STORAGE_BUCKETS } from '../storage/storage.constants';
+import { StoragePartsRejectedError } from '../storage/storage.errors';
 import {
   StorageService,
   type MultipartLocation,
 } from '../storage/storage.service';
+import type { CompleteUploadDto } from './dto/complete-upload.dto';
 import type { CreateVideoDto } from './dto/create-video.dto';
 import type { InitiateUploadResponseDto } from './dto/initiate-upload-response.dto';
 import type { SignPartsDto } from './dto/sign-parts.dto';
 import type { SignedPartsResponseDto } from './dto/signed-parts-response.dto';
 import type { UploadPartsResponseDto } from './dto/upload-parts-response.dto';
+import type { VideoResponseDto } from './dto/video-response.dto';
 import { Video } from './entities/video.entity';
 import { generatePublicId, PUBLIC_ID_PATTERN } from './public-id.util';
-import { VideoProcessingStatus } from './video.enums';
+import { VideoProcessingProducer } from './video-processing.producer';
+import { toVideoResponse } from './video-response.mapper';
+import { VideoFailureReason, VideoProcessingStatus } from './video.enums';
 import {
   ALLOWED_VIDEO_MIME_TYPES,
   PUBLIC_ID_MAX_ATTEMPTS,
@@ -38,8 +45,11 @@ export class VideosService {
     private readonly videoRepository: Repository<Video>,
     private readonly channelsService: ChannelsService,
     private readonly storage: StorageService,
+    private readonly processingProducer: VideoProcessingProducer,
     @Inject(uploadConfig.KEY)
     private readonly upload: ConfigType<typeof uploadConfig>,
+    @Inject(storageConfig.KEY)
+    private readonly storageSettings: ConfigType<typeof storageConfig>,
   ) {}
 
   async initiateUpload(
@@ -157,6 +167,76 @@ export class VideosService {
       partCount: video.part_count,
       uploadedParts: await this.storage.listParts(location),
     };
+  }
+
+  async completeUpload(
+    userId: string,
+    publicId: string,
+    dto: CompleteUploadDto,
+  ): Promise<VideoResponseDto> {
+    const video = await this.findOwnedVideo(userId, publicId);
+    const location = this.pendingMultipart(video);
+    const partNumbers = dto.parts.map((part) => part.partNumber);
+    if (
+      new Set(partNumbers).size !== partNumbers.length ||
+      partNumbers.some((partNumber) => partNumber > video.part_count)
+    ) {
+      throw new InvalidUploadPartsException();
+    }
+
+    try {
+      await this.storage.completeMultipartUpload({
+        ...location,
+        // S3 requires ascending part order
+        parts: dto.parts
+          .map(({ partNumber, etag }) => ({ partNumber, etag }))
+          .sort((a, b) => a.partNumber - b.partNumber),
+      });
+    } catch (error) {
+      if (error instanceof StoragePartsRejectedError) {
+        throw new InvalidUploadPartsException();
+      }
+      throw error;
+    }
+
+    // The declared size is only a hint; the real object size is authoritative
+    const source = { bucket: STORAGE_BUCKETS.VIDEOS, key: video.source_key };
+    const object = await this.storage.headObject(source);
+    if (!object) {
+      throw new Error(`Completed upload ${video.source_key} has no object`);
+    }
+    if (object.contentLength > this.upload.maxSizeBytes) {
+      await this.storage.deleteObject(source);
+      await this.videoRepository.update(video.id, {
+        processing_status: VideoProcessingStatus.FAILED,
+        failure_reason: VideoFailureReason.FILE_TOO_LARGE,
+        upload_id: null,
+      });
+      throw new FileTooLargeException();
+    }
+
+    const completed = {
+      processing_status: VideoProcessingStatus.PROCESSING,
+      size_bytes: object.contentLength,
+      upload_completed_at: new Date(),
+      upload_id: null,
+    };
+    // Conditional on 'uploading' so a concurrent complete cannot enqueue twice
+    const { affected } = await this.videoRepository.update(
+      { id: video.id, processing_status: VideoProcessingStatus.UPLOADING },
+      completed,
+    );
+    if (!affected) {
+      throw new UploadNotInProgressException();
+    }
+
+    // Enqueued only after the status change is committed (per TD-02/TD-06)
+    await this.processingProducer.enqueueProcessing(video.id);
+
+    return toVideoResponse(
+      { ...video, ...completed },
+      this.storageSettings.thumbnailsPublicBaseUrl,
+    );
   }
 
   private pendingMultipart(video: Video): MultipartLocation {

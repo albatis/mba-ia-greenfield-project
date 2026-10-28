@@ -7,3 +7,6 @@ export const PUBLIC_ID_MAX_ATTEMPTS = 3;
 
 // Upper bound of part URLs signed per request; clients ask again for the rest
 export const SIGN_PARTS_MAX = 100;
+
+// S3 caps a multipart upload at 10,000 parts
+export const COMPLETE_PARTS_MAX = 10_000;
