@@ -136,7 +136,7 @@ Source of decisions: `docs/decisions/technical-decisions-next-frontend-openapi-t
 
 The concrete value of `API_URL` depends on Docker Compose topology (e.g., `http://nestjs-api:3000` on a shared Compose network vs `http://host.docker.internal:3000` from a separate stack). The stacks are currently separate — networking integration is deferred to its own infra task; in the meantime, `.env.local` carries whichever value the local environment can reach.
 
-Media streaming will eventually come from Object Storage (S3/MinIO) — TBD.
+Media bytes (upload parts, streaming, download) never pass through the BFF or the API. The browser exchanges them directly with Object Storage (S3-compatible; Garage in dev) through presigned URLs, which the API issues and the BFF relays as JSON. The backend side exists (phase 03); the video UI does not exist yet. Source: `docs/decisions/technical-decisions-phase-03-upload-processing.md` (TD-01, TD-05, TD-10).
 
 Refer to the C4 container diagram at `docs/diagrams/software-arch.mermaid` for the full system view.
 

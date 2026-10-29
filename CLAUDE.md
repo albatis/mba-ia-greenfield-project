@@ -8,27 +8,27 @@ More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 
 ## Repository Structure
 
-This is a monorepo with two main areas:
+This is a monorepo with three main areas:
 
 - `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
 - `docs/` — Project documentation, architecture diagrams, and planning.
-- `next-frontend/` (Next.js) — not yet initialized
+- `next-frontend/` — Frontend (Next.js 16, React 19). Phases 01–02 (auth) implemented; the video UI does not exist yet.
 
 ## Architecture (C4 Container Diagram)
 
 See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 
-- **Frontend** (Next.js) → calls API via REST, streams from Object Storage
-- **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
+- **Frontend** (Next.js) → calls API via REST, uploads to and streams from Object Storage directly via presigned URLs
+- **API** (Nest.js) → business rules, auth, reads/writes DB, presigns storage URLs and manages multipart uploads, publishes jobs to queue, sends emails
 - **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
 - **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
+- **Object Storage** (S3-compatible; Garage in dev, Compose service `storage`) → video files and thumbnails
+- **Message Queue** (BullMQ on Redis, Compose service `redis`) → `video-processing` and `video-maintenance` queues
 - **Email Service** (SMTP) → account confirmation and password recovery
 
 ## Videos
 
-Implemented in `nestjs-project/` (phase 03, backend only). Plan and decisions: `docs/phases/phase-03-upload-processing/`.
+Implemented in `nestjs-project/` (phase 03, backend only). Plan: `docs/phases/phase-03-upload-processing/`. Decisions: `docs/decisions/technical-decisions-phase-03-upload-processing.md`.
 
 **Modules:**
 

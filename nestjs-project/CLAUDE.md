@@ -95,7 +95,8 @@ npm run storage:cors [bucket...]         # Apply browser CORS to video buckets (
 npm run openapi:export                   # Regenerate the versioned openapi.json
 npm run migration:run                    # Apply pending TypeORM migrations
 
-npm test                                 # Unit tests
+npm test                                 # Unit + integration tests (*.spec.ts and *.integration-spec.ts)
+npm run test:integration                 # Integration tests only (already --runInBand)
 npm run test:watch                       # Unit tests in watch mode
 npm run test:cov                         # Coverage report
 npm run test:e2e                         # End-to-end tests (always with --runInBand)
@@ -187,6 +188,8 @@ Whenever possible, prefer storing only the bare address in `.env` and composing 
 ## Architecture
 
 NestJS with standard module structure. Source lives in `src/`, compiled output in `dist/`.
+
+- Two entrypoints share the same codebase: `src/main.ts` boots the HTTP API (`AppModule`), and `src/worker.ts` boots the video worker (`WorkerModule`), with no HTTP server
 
 - Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
 - Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
