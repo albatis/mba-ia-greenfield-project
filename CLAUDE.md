@@ -26,6 +26,70 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 - **Message Queue** (TBD) → video processing job queue
 - **Email Service** (SMTP) → account confirmation and password recovery
 
+## Videos
+
+Implemented in `nestjs-project/` (phase 03, backend only). Plan and decisions: `docs/phases/phase-03-upload-processing/`.
+
+**Modules:**
+
+- `VideosModule` (`src/videos/`): `Video` entity, the HTTP endpoints, and `VideoProcessingProducer`, which enqueues the processing job.
+- `StorageModule` (`src/storage/`): S3 client, presigned URLs, and multipart uploads against Garage.
+- `QueueModule` (`src/queue/`): BullMQ connection plus the queue names and job payloads.
+- `MediaModule` (`src/media/`): typed wrappers around `ffprobe` and `ffmpeg`.
+- `WorkerModule` (`src/worker/`): consumes the queues in the separate `video-worker` process (entry `src/worker.ts`). No processor runs inside the API.
+
+**Video lifecycle (`processing_status`):** `uploading` → `processing` → `ready` | `failed`. `publication_status` only has `draft` for now; `published` arrives in phase 04. When a video fails, `failure_reason` holds one of:
+
+- `FILE_TOO_LARGE`
+- `UNSUPPORTED_CODEC`
+- `PROBE_FAILED`
+- `PROCESSING_ERROR`
+- `UPLOAD_ABANDONED`
+
+**Identifiers:**
+
+- **Public ID:** the API only exposes `public_id`, 11 random base64url characters (`src/videos/public-id.util.ts`), which is the `:videoId` in every route. Malformed IDs answer 404.
+- **Internal UUID:** `videos.id` stays inside the system. It is the `process-video` job payload, and the source object key uses it (`videos/{id}/source`).
+- **Thumbnail key:** `{public_id}.jpg`.
+
+**Upload flow:** resumable multipart upload that goes straight from the client to storage; the file bytes never pass through the API.
+
+1. `POST /videos` validates the declared size and MIME type (`video/mp4`, `video/webm`; `UPLOAD_MAX_SIZE_BYTES`, default 10GB), creates the draft, and starts the multipart. It returns `partSize` / `partCount` (`UPLOAD_PART_SIZE_BYTES`, default 64MB).
+2. `POST /videos/:videoId/upload/parts` signs PUT URLs on demand, up to 100 part numbers per request (`UPLOAD_PART_URL_TTL_SECONDS`).
+3. `GET /videos/:videoId/upload/parts` lists the parts already in storage, for resuming.
+4. `POST /videos/:videoId/upload/complete` takes `{ partNumber, etag }[]`, completes the multipart, and checks the real object size. It then moves the row to `processing` with a conditional `UPDATE` and only afterwards enqueues `process-video`, so concurrent completes never enqueue twice.
+
+**Processing** (`video-processing` queue, job `process-video`, `src/worker/processors/video-processing.processor.ts`):
+
+- **Probe and allowlist:** `ffprobe` reads the file. The declared MIME type selects the allowlist rule (`src/videos/video-codec-allowlist.ts`): MP4 = H.264 + AAC, WebM = VP9 + Opus, and audio is optional. Videos are served as uploaded, with no transcoding.
+- **Faststart:** an MP4 whose `moov` atom sits after `mdat` is remuxed (stream copy) and stored under the same key.
+- **Thumbnail and result:** a thumbnail frame is extracted and uploaded to the public `thumbnails` bucket, and the row becomes `ready` with duration, dimensions, and codecs.
+- **Status writes:** the `ready` and `failed` updates only apply while the row is still `processing`, so a retried job is idempotent. When the last attempt fails, the row becomes `failed` / `PROCESSING_ERROR`.
+
+**Abandoned uploads** (`video-maintenance` queue, scheduler `cleanup-abandoned-uploads`): every `UPLOAD_CLEANUP_INTERVAL_MS`, drafts still `uploading` after `UPLOAD_STALE_AFTER_HOURS` have their multipart aborted and become `failed` / `UPLOAD_ABANDONED`.
+
+**Reading and playback:**
+
+- `GET /videos/:videoId` returns details and status, with `thumbnailUrl` built from `THUMBNAILS_PUBLIC_BASE_URL`.
+- `GET .../stream-url` (`inline`, Range supported) and `GET .../download-url` (`attachment` with the original filename) return presigned GET URLs valid for `VIDEO_URL_TTL_SECONDS`. Both require `ready` and otherwise answer `409 VIDEO_NOT_READY`.
+- Storage serves the bytes; the API never proxies the video.
+
+**Authorization:** every `/videos` endpoint requires the JWT and is owner-only. A video from another channel answers `404 VIDEO_NOT_FOUND`, the same as an unknown one. Anonymous watching of published videos arrives in later phases.
+
+**Domain errors** (`src/common/exceptions/domain.exception.ts`):
+
+| Status | Codes |
+|---|---|
+| `400` | `FILE_TOO_LARGE`, `UNSUPPORTED_VIDEO_TYPE`, `INVALID_PART_NUMBER`, `INVALID_UPLOAD_PARTS` |
+| `404` | `VIDEO_NOT_FOUND` |
+| `409` | `UPLOAD_NOT_IN_PROGRESS`, `VIDEO_NOT_READY` |
+
+**Contract and manual testing:**
+
+- The contract is in `nestjs-project/openapi.json` (regenerate with `npm run openapi:export`).
+- `nestjs-project/api.http` has the full flow (steps 10–17).
+- Environment setup (`storage`, `redis`, `video-worker`, the Garage bootstrap) is in `nestjs-project/CLAUDE.md`.
+
 ## Docker Networking
 
 This project runs entirely in Docker containers. When configuring connections between services (database, cache, queue, etc.), **always use the Docker Compose service name** as the host — never `localhost` or `127.0.0.1`.
