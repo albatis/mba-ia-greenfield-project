@@ -1,6 +1,6 @@
 # phase-03-upload-processing — Progress
 
-**Status:** in_progress
+**Status:** completed
 **SIs:** 13/13 completed
 
 ### SI-03.1 — Infra: dependências, serviços Compose (storage, Redis, worker) e namespaces de configuração
@@ -149,3 +149,5 @@
 - **Type-check:** `npx tsc --noEmit` exit 0.
 - **Build:** `npm run build` → `dist/main.js` and `dist/worker.js`.
 - **Lint: failing, pre-existing debt.** `eslint "{src,apps,libs,test}/**/*.ts"` (run without `--fix`, so untouched files are not rewritten) reports 148 errors and 40 warnings in 10 files: `test/auth.e2e-spec.ts` 48, `auth.service.spec.ts` 45, `mail.service.integration-spec.ts` 16, `channels.service.spec.ts` 15, `auth.service.integration-spec.ts` 7, `domain-exception.filter.spec.ts` 7, `channels.service.ts` 6, `validation-exception.filter.spec.ts` 2, `create-test-data-source.ts` 1, `users.service.integration-spec.ts` 1. None of the errors are on lines changed by this branch, and every file created in phase 03 lints clean. Fixing them is a separate task (see SI-03.3 and SI-03.5 observations).
+- **Lint fixed (user decision, 2026-10-28), separate commit on this branch:** 148 errors → 0, 40 → 23 warnings. `ChannelsService` uses the typed `isUniqueViolationOn` helper (SI-03.5 follow-up) instead of its own `as any` check. `src/test/mailpit.ts` returns typed Mailpit messages. `auth.e2e-spec.ts` reads bodies through a typed `bodyOf()`. Both auth specs spy on `MailService` through a typed cast. `auth.service.spec.ts` replaces `jest.Mocked<T>` with a local `MockOf<T, K>` (key remap drops the method declarations behind `unbound-method`). The other specs use `as unknown as <Entity>` instead of `as any`. The 23 remaining warnings are `no-unsafe-argument` (`as any` passed to `mockResolvedValue`), and the rule is configured as a warning.
+- **Re-run after the lint fix:** unit + integration 42 suites / 291 tests, e2e 8 suites / 82 tests, `tsc --noEmit` exit 0, `npm run lint` exit 0 (no files changed by `--fix`), `npm run build` → `dist/main.js` + `dist/worker.js`.

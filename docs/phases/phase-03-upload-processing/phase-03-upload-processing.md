@@ -761,5 +761,5 @@ SI-03.13 — depends on SI-03.5, SI-03.6, SI-03.7, SI-03.10, SI-03.11, SI-03.12 
 - [x] Backend unit + integration tests pass (`docker compose exec nestjs-api npm test -- --runInBand`)
 - [x] E2E tests pass (`docker compose exec nestjs-api npm run test:e2e`)
 - [x] Type/compilation checks pass (`docker compose exec nestjs-api npx tsc --noEmit`)
-- [ ] Lint passes (`docker compose exec nestjs-api npm run lint`)
+- [x] Lint passes (`docker compose exec nestjs-api npm run lint`)
 - [x] Project builds successfully, including the worker entrypoint (`docker compose exec nestjs-api npm run build` → `dist/main.js` and `dist/worker.js`)
